@@ -6,9 +6,9 @@ from openood.postprocessors import (
     CutPastePostprocessor, DICEPostprocessor, DRAEMPostprocessor,
     DropoutPostProcessor, DSVDDPostprocessor, EBOPostprocessor,
     EnsemblePostprocessor, GMMPostprocessor, GodinPostprocessor,
-    GradNormPostprocessor, GRAMPostprocessor, KLMatchingPostprocessor,
-    KNNPostprocessor, MaxLogitPostprocessor, MCDPostprocessor,
-    MDSPostprocessor, MDSEnsemblePostprocessor, MOSPostprocessor,
+    GradNormPostprocessor, GRAMPostprocessor, JacNormPostprocessor,
+    KLMatchingPostprocessor, KNNPostprocessor, MaxLogitPostprocessor,
+    MCDPostprocessor, MDSPostprocessor, MDSEnsemblePostprocessor, MOSPostprocessor,
     ODINPostprocessor, OpenGanPostprocessor, OpenMax, PatchcorePostprocessor,
     Rd4adPostprocessor, ReactPostprocessor, ResidualPostprocessor,
     ScalePostprocessor, SSDPostprocessor, TemperatureScalingPostprocessor,
@@ -16,12 +16,14 @@ from openood.postprocessors import (
     RMDSPostprocessor, SHEPostprocessor, CIDERPostprocessor, NPOSPostprocessor,
     GENPostprocessor, NNGuidePostprocessor, RelationPostprocessor,
     T2FNormPostprocessor, ReweightOODPostprocessor, fDBDPostprocessor,
-    AdaScalePostprocessor, IODINPostprocessor, NCIPostprocessor)
+    AdaScalePostprocessor, IODINPostprocessor, NCIPostprocessor,
+    FdbdJacNormPostprocessor)
 from openood.utils.config import Config, merge_configs
 
 postprocessors = {
     'nci': NCIPostprocessor,
     'fdbd': fDBDPostprocessor,
+    'fdbd-jacnorm': FdbdJacNormPostprocessor,
     'ash': ASHPostprocessor,
     'cider': CIDERPostprocessor,
     'conf_branch': ConfBranchPostprocessor,
@@ -39,6 +41,7 @@ postprocessors = {
     'react': ReactPostprocessor,
     'vim': VIMPostprocessor,
     'gradnorm': GradNormPostprocessor,
+    'jacnorm': JacNormPostprocessor,
     'godin': GodinPostprocessor,
     'mds': MDSPostprocessor,
     'gram': GRAMPostprocessor,

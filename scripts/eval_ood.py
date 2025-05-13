@@ -7,6 +7,9 @@ import argparse
 import pickle
 import collections
 from glob import glob
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -25,7 +28,6 @@ from openood.networks.npos_net import NPOSNet
 from openood.networks.palm_net import PALMNet
 from openood.networks.t2fnorm_net import T2FNormNet
 from openood.networks.ascood_net import ASCOODNet
-
 
 def update(d, u):
     for k, v in u.items():
@@ -52,6 +54,7 @@ parser.add_argument('--wrapper-net',
                     type=str,
                     default=None,
                     choices=['ASCOODNet'])
+parser.add_argument('--plot-score', type=lambda x: x.lower() in ('true','1','yes'), default=True, help='Enable plotting of score histograms (true/false).')
 args = parser.parse_args()
 
 root = args.root
@@ -188,6 +191,30 @@ for subfolder in sorted(glob(os.path.join(root, 's*'))):
 
     metrics = evaluator.eval_ood(fsood=args.fsood)
     all_metrics.append(metrics.to_numpy())
+
+    if args.plot_score:
+        # collect ID confidences
+        _, id_conf, _ = evaluator.scores['id']['test']
+        # collect OOD confidences per dataset
+        ood_conf_map = {}
+        for split in ['near', 'far']:
+            for ds_name, ds_vals in evaluator.scores['ood'][split].items():
+                if ds_vals is None:
+                    continue
+                ood_conf_map[ds_name] = ds_vals[1]
+        # plot all distributions in one figure
+        plt.figure()
+        plt.hist(id_conf, bins=50, alpha=0.5, label='ID')
+        for ds_name, ood_conf in ood_conf_map.items():
+            plt.hist(ood_conf, bins=50, alpha=0.5, label=ds_name)
+        plt.xlabel('Confidence Score')
+        plt.ylabel('Count')
+        plt.legend()
+        plt.title(f'ID vs OOD score histogram ({os.path.basename(subfolder)})')
+        plot_dir = os.path.join(subfolder, 'plots')
+        os.makedirs(plot_dir, exist_ok=True)
+        plt.savefig(os.path.join(plot_dir, f'hist_{postprocessor_name}.png'))
+        plt.close()
 
     # save computed scores
     if args.save_score:

@@ -43,6 +43,8 @@ from .vim_postprocessor import VIMPostprocessor
 from .rts_postprocessor import RTSPostprocessor
 from .gen_postprocessor import GENPostprocessor
 from .relation_postprocessor import RelationPostprocessor
+from .jacnorm_postprocessor import JacNormPostprocessor
+from .fdbd_jacnorm_postprocessor import FdbdJacNormPostprocessor
 
 
 def get_postprocessor(config: Config):
@@ -90,6 +92,8 @@ def get_postprocessor(config: Config):
         'gen': GENPostprocessor,
         'relation': RelationPostprocessor,
         't2fnorm': T2FNormPostprocessor,
+        'jacnorm': JacNormPostprocessor,
+        'fdbd-jacnorm': FdbdJacNormPostprocessor,
     }
 
     return postprocessors[config.postprocessor.name](config)

@@ -1,0 +1,5 @@
+postprocessor:
+  name: fdbd-jacnorm
+  APS_mode: False
+  postprocessor_args:
+    distance_as_normalizer: True 

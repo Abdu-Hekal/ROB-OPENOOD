@@ -1,5 +1,6 @@
 from .nci_postprocessor import NCIPostprocessor
 from .fdbd_postprocessor import fDBDPostprocessor
+from .fdbd_jacnorm_postprocessor import FdbdJacNormPostprocessor
 from .ash_postprocessor import ASHPostprocessor
 from .base_postprocessor import BasePostprocessor
 from .cider_postprocessor import CIDERPostprocessor
@@ -47,3 +48,4 @@ from .relation_postprocessor import RelationPostprocessor
 from .t2fnorm_postprocessor import T2FNormPostprocessor
 from .reweightood_postprocessor import ReweightOODPostprocessor
 from .adascale_postprocessor import AdaScalePostprocessor
+from .jacnorm_postprocessor import JacNormPostprocessor
