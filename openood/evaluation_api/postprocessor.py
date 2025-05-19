@@ -17,7 +17,8 @@ from openood.postprocessors import (
     GENPostprocessor, NNGuidePostprocessor, RelationPostprocessor,
     T2FNormPostprocessor, ReweightOODPostprocessor, fDBDPostprocessor,
     AdaScalePostprocessor, IODINPostprocessor, NCIPostprocessor,
-    FdbdJacNormPostprocessor)
+    FdbdJacNormPostprocessor, DeepfoolPostprocessor,
+    VariancePostprocessor)
 from openood.utils.config import Config, merge_configs
 
 postprocessors = {
@@ -59,7 +60,6 @@ postprocessors = {
     'opengan': OpenGanPostprocessor,
     'knn': KNNPostprocessor,
     'dice': DICEPostprocessor,
-    'scale': ScalePostprocessor,
     'ssd': SSDPostprocessor,
     'she': SHEPostprocessor,
     'rd4ad': Rd4adPostprocessor,
@@ -72,6 +72,8 @@ postprocessors = {
     'reweightood': ReweightOODPostprocessor,
     'adascale_a': AdaScalePostprocessor,
     'adascale_l': AdaScalePostprocessor,
+    'deepfool': DeepfoolPostprocessor,
+    'variance': VariancePostprocessor,
 }
 
 link_prefix = 'https://raw.githubusercontent.com/Jingkang50/OpenOOD/main/configs/postprocessors/'

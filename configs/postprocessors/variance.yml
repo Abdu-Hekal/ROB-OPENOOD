@@ -1,0 +1,7 @@
+postprocessor:
+  name: variance
+  APS_mode: False
+  postprocessor_args:
+    num_samples: 5
+    noise_magnitude: 0.01
+    score_postprocessor: msp  

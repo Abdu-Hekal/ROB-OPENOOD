@@ -45,6 +45,7 @@ from .gen_postprocessor import GENPostprocessor
 from .relation_postprocessor import RelationPostprocessor
 from .jacnorm_postprocessor import JacNormPostprocessor
 from .fdbd_jacnorm_postprocessor import FdbdJacNormPostprocessor
+from .variance_postprocessor import VariancePostprocessor
 
 
 def get_postprocessor(config: Config):
@@ -94,6 +95,7 @@ def get_postprocessor(config: Config):
         't2fnorm': T2FNormPostprocessor,
         'jacnorm': JacNormPostprocessor,
         'fdbd-jacnorm': FdbdJacNormPostprocessor,
+        'variance': VariancePostprocessor,
     }
 
     return postprocessors[config.postprocessor.name](config)

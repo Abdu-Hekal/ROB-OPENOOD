@@ -38,5 +38,5 @@ class FdbdJacNormPostprocessor(BasePostprocessor):
         # compute L2 norm of gradients for each sample
         norms = grads.view(grads.size(0), -1).norm(p=2, dim=1)
         # time-to-boundary: distance / speed (avoid div0)
-        score = -(norms) #fdbd_score / (norms + eps)
+        score = fdbd_score-(norms) #fdbd_score / (norms + eps)
         return preds, score 

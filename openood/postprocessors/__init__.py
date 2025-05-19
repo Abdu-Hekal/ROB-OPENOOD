@@ -49,3 +49,5 @@ from .t2fnorm_postprocessor import T2FNormPostprocessor
 from .reweightood_postprocessor import ReweightOODPostprocessor
 from .adascale_postprocessor import AdaScalePostprocessor
 from .jacnorm_postprocessor import JacNormPostprocessor
+from .deepfool_postprocessor import DeepfoolPostprocessor
+from .variance_postprocessor import VariancePostprocessor
