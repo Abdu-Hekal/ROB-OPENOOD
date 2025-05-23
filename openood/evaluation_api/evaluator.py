@@ -13,12 +13,12 @@ from openood.postprocessors import BasePostprocessor
 from openood.networks.ash_net import ASHNet
 from openood.networks.react_net import ReactNet
 from openood.networks.scale_net import ScaleNet
-from openood.networks.adascale_net import AdaScaleANet, AdaScaleLNet
 
 from .datasets import DATA_INFO, data_setup, get_id_ood_dataloader
 from .postprocessor import get_postprocessor
 from .preprocessor import get_default_preprocessor
 
+import yaml
 
 class Evaluator:
     def __init__(
@@ -33,6 +33,7 @@ class Evaluator:
         batch_size: int = 200,
         shuffle: bool = False,
         num_workers: int = 4,
+        robustbench=False,
     ) -> None:
         """A unified, easy-to-use API for evaluating (most) discriminative OOD
         detection methods.
@@ -90,7 +91,7 @@ class Evaluator:
         # set up config root
         if config_root is None:
             filepath = os.path.dirname(os.path.abspath(__file__))
-            config_root = os.path.join('/', *filepath.split('/')[:-2], 'configs')
+            config_root = os.path.join(*filepath.split('/')[:-2], 'configs')
 
         # get postprocessor
         if postprocessor is None:
@@ -105,26 +106,22 @@ class Evaluator:
         loader_kwargs = {
             'batch_size': batch_size,
             'shuffle': shuffle,
-            'num_workers': num_workers
+            'num_workers': num_workers,
         }
         dataloader_dict = get_id_ood_dataloader(id_name, data_root,
                                                 preprocessor, **loader_kwargs)
 
         # wrap base model to work with certain postprocessors
-        if postprocessor_name == 'react':
+        if postprocessor_name == 'react'or postprocessor_name =='neo_react':
             net = ReactNet(net)
-        elif postprocessor_name == 'ash':
+        elif postprocessor_name in ['ash' ,'neo_ash', 'pro_ash']:
             net = ASHNet(net)
-        elif postprocessor_name == 'scale':
+        elif 'scale' in postprocessor_name:
             net = ScaleNet(net)
-        elif postprocessor_name == 'adascale_a':
-            net = AdaScaleANet(net)
-        elif postprocessor_name == 'adascale_l':
-            net = AdaScaleLNet(net)
 
         # postprocessor setup
         postprocessor.setup(net, dataloader_dict['id'], dataloader_dict['ood'])
-
+        self.postprocessor_name=postprocessor_name
         self.id_name = id_name
         self.net = net
         self.preprocessor = preprocessor
@@ -292,7 +289,11 @@ class Evaluator:
                 id_pred = np.concatenate((id_pred, csid_pred))
                 id_conf = np.concatenate((id_conf, csid_conf))
                 id_gt = np.concatenate((id_gt, csid_gt))
-
+                
+            if self.metrics[f'{id_name}_acc'] is None:
+                self.eval_acc(id_name)
+                id_acc=self.metrics[f'{id_name}_acc']
+                print(f'IND accuracy: {id_acc}')
             # load nearood data and compute ood metrics
             near_metrics = self._eval_ood([id_pred, id_conf, id_gt],
                                           ood_split='near',
@@ -302,8 +303,7 @@ class Evaluator:
                                          ood_split='far',
                                          progress=progress)
 
-            if self.metrics[f'{id_name}_acc'] is None:
-                self.eval_acc(id_name)
+
             near_metrics[:, -1] = np.array([self.metrics[f'{id_name}_acc']] *
                                            len(near_metrics))
             far_metrics[:, -1] = np.array([self.metrics[f'{id_name}_acc']] *
@@ -423,6 +423,35 @@ class Evaluator:
         print('Final hyperparam: {}'.format(
             self.postprocessor.get_hyperparam()))
         self.postprocessor.hyperparam_search_done = True
+        self._save_hyperparameters_to_file(hyperparam_combination[final_index], max_auroc)
+
+    def _save_hyperparameters_to_file(self, hyperparams, max_auroc):
+        file_path = "ASPhyperparameters.yml"
+        # Convert numpy types to native Python types for compatibility with YAML
+        def convert_to_python_type(value):
+            if isinstance(value, np.generic):  
+                return value.item()
+            elif isinstance(value, list): 
+                return [convert_to_python_type(v) for v in value]
+            return value
+        hyperparams = convert_to_python_type(hyperparams)
+        max_auroc = convert_to_python_type(max_auroc)
+        if os.path.exists(file_path):
+            with open(file_path, "r") as file:
+                data = yaml.safe_load(file) or {}
+        else:
+            data = {}
+        # Update the data for the current postprocessor
+        if self.postprocessor_name not in data:
+            data[self.postprocessor_name] = {}
+        data[self.postprocessor_name][self.id_name] = {
+            "hyperparameters": hyperparams,
+            "max_auroc": max_auroc
+        }
+
+        with open(file_path, "w") as file:
+            yaml.dump(data, file)
+        print(f'Hyperparameters for {self.postprocessor_name} saved to {file_path}')
 
     def recursive_generator(self, list, n):
         if n == 1:
