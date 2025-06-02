@@ -63,6 +63,13 @@ class VariancePostprocessor(BasePostprocessor):
         # compute maximum distance from mean as proxy for radius of minimum enclosing ball
         dist_from_mean = (score_stack - score_mean.unsqueeze(0)).abs()
         radius = dist_from_mean.max(dim=0)[0]
-        # confidence score: mean and negative variance of base score (ID > OOD)
-        conf = score_mean/(radius+1e-12)
-        return preds, conf 
+        # compute multiple confidence measures:
+        # 1. mean score
+        # 2. inverse of std deviation of base score
+        inv_std = 1.0/(torch.sqrt(score_var) + 1e-12)
+        # 3. inverse of average pairwise distance
+        inv_apd = 1.0/(avg_pairwise_dist + 1e-12)
+        # 4. inverse of radius
+        inv_radius = 1.0/(radius + 1e-12)
+        # return predictions and list of confidence measures
+        return preds, [score_mean, inv_std, inv_apd, inv_radius] 

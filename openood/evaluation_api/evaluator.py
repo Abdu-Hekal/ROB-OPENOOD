@@ -237,7 +237,7 @@ class Evaluator:
                     self.scores['id_labels'] = all_labels
                 else:
                     all_preds = self.scores['id_preds']
-                    all_labels = self.scores['id_labels']
+                    self.scores['id_labels'] = all_labels
 
                 correct += (all_preds == all_labels).sum().item()
                 total += len(all_labels)
@@ -249,124 +249,149 @@ class Evaluator:
             raise ValueError(f'Unknown data name {data_name}')
 
     def eval_ood(self, fsood: bool = False, progress: bool = True):
+        # unified OOD evaluation supporting multiple confidence methods
         id_name = 'id' if not fsood else 'csid'
         task = 'ood' if not fsood else 'fsood'
         if self.metrics[task] is None:
             self.net.eval()
-
-            # id score
+            # obtain ID predictions and confidences
             if self.scores['id']['test'] is None:
-                print(f'Performing inference on {self.id_name} test set...',
-                      flush=True)
+                print(f'Performing inference on {self.id_name} test set...', flush=True)
                 id_pred, id_conf, id_gt = self.postprocessor.inference(
                     self.net, self.dataloader_dict['id']['test'], progress)
                 self.scores['id']['test'] = [id_pred, id_conf, id_gt]
             else:
                 id_pred, id_conf, id_gt = self.scores['id']['test']
-
+            # handle class-split ID if fsood
             if fsood:
-                csid_pred, csid_conf, csid_gt = [], [], []
-                for i, dataset_name in enumerate(self.scores['csid'].keys()):
-                    if self.scores['csid'][dataset_name] is None:
-                        print(
-                            f'Performing inference on {self.id_name} '
-                            f'(cs) test set [{i+1}]: {dataset_name}...',
-                            flush=True)
-                        temp_pred, temp_conf, temp_gt = \
-                            self.postprocessor.inference(
-                                self.net,
-                                self.dataloader_dict['csid'][dataset_name],
-                                progress)
-                        self.scores['csid'][dataset_name] = [
-                            temp_pred, temp_conf, temp_gt
-                        ]
-
-                    csid_pred.append(self.scores['csid'][dataset_name][0])
-                    csid_conf.append(self.scores['csid'][dataset_name][1])
-                    csid_gt.append(self.scores['csid'][dataset_name][2])
-
-                csid_pred = np.concatenate(csid_pred)
-                csid_conf = np.concatenate(csid_conf)
-                csid_gt = np.concatenate(csid_gt)
-
-                id_pred = np.concatenate((id_pred, csid_pred))
-                id_conf = np.concatenate((id_conf, csid_conf))
-                id_gt = np.concatenate((id_gt, csid_gt))
-
-            # load nearood data and compute ood metrics
-            near_metrics = self._eval_ood([id_pred, id_conf, id_gt],
-                                          ood_split='near',
-                                          progress=progress)
-            # load farood data and compute ood metrics
-            far_metrics = self._eval_ood([id_pred, id_conf, id_gt],
-                                         ood_split='far',
-                                         progress=progress)
-
+                cs_preds, cs_confs, cs_gts = [], [], []
+                for i, ds in enumerate(self.scores['csid'].keys()):
+                    if self.scores['csid'][ds] is None:
+                        print(f'Performing inference on CSID set [{i+1}]: {ds}', flush=True)
+                        tp, tc, tg = self.postprocessor.inference(
+                            self.net, self.dataloader_dict['csid'][ds], progress)
+                        self.scores['csid'][ds] = [tp, tc, tg]
+                    tp, tc, tg = self.scores['csid'][ds]
+                    cs_preds.append(tp)
+                    cs_confs.append(tc)
+                    cs_gts.append(tg)
+                id_pred = np.concatenate([id_pred] + cs_preds)
+                id_conf = np.concatenate([id_conf] + cs_confs, axis=0)
+                id_gt = np.concatenate([id_gt] + cs_gts, axis=0)
+            # get DataFrames for near and far splits with MultiIndex
+            df_near = self._eval_ood([id_pred, id_conf, id_gt], ood_split='near', progress=progress)
+            df_far = self._eval_ood([id_pred, id_conf, id_gt], ood_split='far', progress=progress)
+            # override ACC column with classifier accuracy
             if self.metrics[f'{id_name}_acc'] is None:
                 self.eval_acc(id_name)
-            near_metrics[:, -1] = np.array([self.metrics[f'{id_name}_acc']] *
-                                           len(near_metrics))
-            far_metrics[:, -1] = np.array([self.metrics[f'{id_name}_acc']] *
-                                          len(far_metrics))
-
-            self.metrics[task] = pd.DataFrame(
-                np.concatenate([near_metrics, far_metrics], axis=0),
-                index=list(self.dataloader_dict['ood']['near'].keys()) +
-                ['nearood'] + list(self.dataloader_dict['ood']['far'].keys()) +
-                ['farood'],
-                columns=['FPR@95', 'AUROC', 'AUPR_IN', 'AUPR_OUT', 'ACC'],
-            )
+            id_acc = self.metrics[f'{id_name}_acc']
+            # set ACC for all rows and concatenate near/far DataFrames
+            df_near['ACC'] = id_acc
+            df_far['ACC'] = id_acc
+            self.metrics[task] = pd.concat([df_near, df_far])
         else:
             print('Evaluation has already been done!')
-
-        with pd.option_context(
-                'display.max_rows', None, 'display.max_columns', None,
-                'display.float_format',
-                '{:,.2f}'.format):  # more options can be specified also
-            print(self.metrics[task])
-
+        # display full metrics table, splitting by confidence method only if multiple
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.float_format', '{:,.2f}'.format):
+            df = self.metrics[task]
+            # identify unique confidence methods
+            confs = df.index.get_level_values('conf').unique()
+            if len(confs) > 1:
+                # multiple methods: print a table per method
+                for conf in confs:
+                    print(f"=== {conf or 'default'} ===")
+                    df_conf = df.xs(conf, level='conf')
+                    print(df_conf)
+                    print()
+            else:
+                # single method: drop conf level and print full table
+                df_single = df.droplevel('conf')
+                print(df_single)
         return self.metrics[task]
 
     def _eval_ood(self,
                   id_list: List[np.ndarray],
                   ood_split: str = 'near',
                   progress: bool = True):
+        """
+        Evaluate OOD for a given split, supporting multiple confidence methods.
+        Returns:
+            metrics_arr: np.ndarray of shape [num_rows, 5] (rows include per-dataset and mean)
+            index_list: List[str] of length num_rows for DataFrame index
+        """
         print(f'Processing {ood_split} ood...', flush=True)
-        [id_pred, id_conf, id_gt] = id_list
-        metrics_list = []
-        for dataset_name, ood_dl in self.dataloader_dict['ood'][
-                ood_split].items():
+        id_pred, id_conf, id_gt = id_list
+        # collect records as (dataset, method, metrics_array)
+        records = []
+        # Iterate through each OOD dataset
+        for dataset_name, ood_dl in self.dataloader_dict['ood'][ood_split].items():
             if self.scores['ood'][ood_split][dataset_name] is None:
-                print(f'Performing inference on {dataset_name} dataset...',
-                      flush=True)
+                print(f'Performing inference on {dataset_name} dataset...', flush=True)
                 ood_pred, ood_conf, ood_gt = self.postprocessor.inference(
                     self.net, ood_dl, progress)
-                self.scores['ood'][ood_split][dataset_name] = [
-                    ood_pred, ood_conf, ood_gt
-                ]
+                self.scores['ood'][ood_split][dataset_name] = [ood_pred, ood_conf, ood_gt]
             else:
-                print(
-                    'Inference has been performed on '
-                    f'{dataset_name} dataset...',
-                    flush=True)
-                [ood_pred, ood_conf,
-                 ood_gt] = self.scores['ood'][ood_split][dataset_name]
-
-            ood_gt = -1 * np.ones_like(ood_gt)  # hard set to -1 as ood
-            pred = np.concatenate([id_pred, ood_pred])
-            conf = np.concatenate([id_conf, ood_conf])
-            label = np.concatenate([id_gt, ood_gt])
-
-            print(f'Computing metrics on {dataset_name} dataset...')
-            ood_metrics = compute_all_metrics(conf, label, pred)
-            metrics_list.append(ood_metrics)
-            self._print_metrics(ood_metrics)
-
+                print(f'Inference has been performed on {dataset_name} dataset...', flush=True)
+                ood_pred, ood_conf, ood_gt = self.scores['ood'][ood_split][dataset_name]
+            # label OOD as -1
+            ood_gt = -1 * np.ones_like(ood_gt)
+            # combine ID and OOD
+            pred = np.concatenate([id_pred, ood_pred], axis=0)
+            conf = np.concatenate([id_conf, ood_conf], axis=0)
+            label = np.concatenate([id_gt, ood_gt], axis=0)
+            # compute metrics
+            if conf.ndim == 1:
+                # single confidence method
+                m = compute_all_metrics(conf, label, pred)
+                records.append((dataset_name, '', m))
+                # print metric label for this method
+                print(f"--- {dataset_name} ---")
+                self._print_metrics(m)
+            else:
+                # multiple confidence methods
+                for i in range(conf.shape[1]):
+                    m = compute_all_metrics(conf[:, i], label, pred)
+                    # determine method label
+                    if hasattr(self.postprocessor, 'metric_labels'):
+                        method = self.postprocessor.metric_labels[i]
+                    else:
+                        method = f"c{i}"
+                    records.append((dataset_name, method, m))
+                    # print metric label for this method
+                    print(f"--- {dataset_name}_{method} ---")
+                    self._print_metrics(m)
+        # compute mean across datasets for each method
         print('Computing mean metrics...', flush=True)
-        metrics_list = np.array(metrics_list)
-        metrics_mean = np.mean(metrics_list, axis=0, keepdims=True)
-        self._print_metrics(list(metrics_mean[0]))
-        return np.concatenate([metrics_list, metrics_mean], axis=0) * 100
+        if conf.ndim == 1:
+            # mean over datasets for single method
+            arrs = [m for _,_,m in records]
+            mean_m = np.mean(arrs, axis=0)
+            records.append((f'{ood_split}ood', '', mean_m))
+        else:
+            num_conf = conf.shape[1]
+            for i in range(num_conf):
+                # collect metrics of method i across all datasets
+                if hasattr(self.postprocessor, 'metric_labels'):
+                    method = self.postprocessor.metric_labels[i]
+                else:
+                    method = f'c{i}'
+                arrs = [m for _,mth,m in records if mth == method]
+                mean_m = np.mean(arrs, axis=0)
+                records.append((f'{ood_split}ood', method, mean_m))
+                # print metric label for this method
+                print(f"--- {ood_split}ood_{method} ---")
+                self._print_metrics(mean_m)
+        # build DataFrame
+        data, idx = [], []
+        for ds, method, m in records:
+            # convert metric vector to numpy array, then scale
+            arr = np.array(m)
+            data.append(arr * 100)
+            idx.append((ds, method))
+        df = pd.DataFrame(data,
+                          index=pd.MultiIndex.from_tuples(idx, names=['dataset','conf']),
+                          columns=['FPR@95','AUROC','AUPR_IN','AUPR_OUT','ACC'])
+        return df
 
     def _print_metrics(self, metrics):
         [fpr, auroc, aupr_in, aupr_out, _] = metrics

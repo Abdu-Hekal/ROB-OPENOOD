@@ -46,7 +46,7 @@ parser.add_argument(
     type=str,
     default='cifar10',
     choices=['cifar10', 'cifar100', 'aircraft', 'cub', 'imagenet200'])
-parser.add_argument('--batch-size', type=int, default=200)
+parser.add_argument('--batch-size', type=int, default=500)
 parser.add_argument('--save-csv', action='store_true')
 parser.add_argument('--save-score', action='store_true')
 parser.add_argument('--fsood', action='store_true')
@@ -243,6 +243,19 @@ if args.save_csv:
     saving_root = os.path.join(root, 'ood' if not args.fsood else 'fsood')
     if not os.path.exists(saving_root):
         os.makedirs(saving_root)
-    df.to_csv(os.path.join(saving_root, f'{postprocessor_name}.csv'))
-else:
-    print(df)
+    csv_path = os.path.join(saving_root, f'{postprocessor_name}.csv')
+    # write one table per confidence method in a single CSV file
+    confs = df.index.get_level_values('conf').unique()
+    with open(csv_path, 'w') as f:
+        for conf in confs:
+            f.write(f"{conf or 'default'}\n")
+            df_conf = df.xs(conf, level='conf')
+            df_conf.to_csv(f)
+            f.write("\n")
+# print the metrics per confidence method
+confs = df.index.get_level_values('conf').unique()
+for conf in confs:
+    print(f"=== {conf or 'default'} ===")
+    df_conf = df.xs(conf, level='conf')
+    print(df_conf)
+    print()

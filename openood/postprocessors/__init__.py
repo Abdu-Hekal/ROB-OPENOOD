@@ -51,3 +51,6 @@ from .adascale_postprocessor import AdaScalePostprocessor
 from .jacnorm_postprocessor import JacNormPostprocessor
 from .deepfool_postprocessor import DeepfoolPostprocessor
 from .variance_postprocessor import VariancePostprocessor
+from .play_postprocessor import PlayPostprocessor
+from .ratio_postprocessor import RatioPostprocessor
+from .similarity_postprocessor import SimilarityPostprocessor

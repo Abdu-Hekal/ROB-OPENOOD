@@ -46,6 +46,9 @@ from .relation_postprocessor import RelationPostprocessor
 from .jacnorm_postprocessor import JacNormPostprocessor
 from .fdbd_jacnorm_postprocessor import FdbdJacNormPostprocessor
 from .variance_postprocessor import VariancePostprocessor
+from .play_postprocessor import PlayPostprocessor
+from .ratio_postprocessor import RatioPostprocessor
+from .similarity_postprocessor import SimilarityPostprocessor
 
 
 def get_postprocessor(config: Config):
@@ -96,6 +99,9 @@ def get_postprocessor(config: Config):
         'jacnorm': JacNormPostprocessor,
         'fdbd-jacnorm': FdbdJacNormPostprocessor,
         'variance': VariancePostprocessor,
+        'similarity': SimilarityPostprocessor,
+        'play': PlayPostprocessor,
+        'ratio': RatioPostprocessor,
     }
 
     return postprocessors[config.postprocessor.name](config)

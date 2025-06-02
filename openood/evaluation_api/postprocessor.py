@@ -18,7 +18,8 @@ from openood.postprocessors import (
     T2FNormPostprocessor, ReweightOODPostprocessor, fDBDPostprocessor,
     AdaScalePostprocessor, IODINPostprocessor, NCIPostprocessor,
     FdbdJacNormPostprocessor, DeepfoolPostprocessor,
-    VariancePostprocessor)
+    VariancePostprocessor, PlayPostprocessor, SimilarityPostprocessor,
+    RatioPostprocessor)
 from openood.utils.config import Config, merge_configs
 
 postprocessors = {
@@ -74,6 +75,9 @@ postprocessors = {
     'adascale_l': AdaScalePostprocessor,
     'deepfool': DeepfoolPostprocessor,
     'variance': VariancePostprocessor,
+    'play': PlayPostprocessor,
+    'similarity': SimilarityPostprocessor,
+    'ratio': RatioPostprocessor,
 }
 
 link_prefix = 'https://raw.githubusercontent.com/Jingkang50/OpenOOD/main/configs/postprocessors/'
