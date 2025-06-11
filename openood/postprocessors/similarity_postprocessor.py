@@ -81,38 +81,65 @@ class SimilarityPostprocessor(BasePostprocessor):
         metrics.append(torch.stack(mmds))
         
         # 6. Variance of max logit
-        max_logit_vars = []
         neg_max_logit_vars = []
         for j in range(batch_size):
             logits = logit_stack[:, j, :]
             max_logits = logits.max(dim=1)[0]
-            max_logit_vars.append(max_logits.var(dim=0))
             neg_max_logit_vars.append(-max_logits.var(dim=0))
-        metrics.append(torch.stack(max_logit_vars))
         metrics.append(torch.stack(neg_max_logit_vars))
         
         # 7. Variance of mean logit
-        mean_logit_vars = []
         neg_mean_logit_vars = []
         for j in range(batch_size):
             logits = logit_stack[:, j, :]
             mean_logits = logits.mean(dim=1)
-            mean_logit_vars.append(mean_logits.var(dim=0))
             neg_mean_logit_vars.append(-mean_logits.var(dim=0))
-        metrics.append(torch.stack(mean_logit_vars))
         metrics.append(torch.stack(neg_mean_logit_vars))
         
         # 8. Variance of entropy
-        entropy_vars = []
         neg_entropy_vars = []
         for j in range(batch_size):
             logits = logit_stack[:, j, :]
             probs = torch.softmax(logits, dim=1)
             entropies = -(probs * torch.log(probs + eps)).sum(dim=1)
-            entropy_vars.append(entropies.var(dim=0))
             neg_entropy_vars.append(-entropies.var(dim=0))
-        metrics.append(torch.stack(entropy_vars))
         metrics.append(torch.stack(neg_entropy_vars))
+
+        # 9. Disagreement Score
+        disagreement_scores = []
+        for j in range(batch_size):
+            logits = logit_stack[:, j, :]
+            max_logits, predicted_classes = torch.max(logits, dim=1)
+            truncated_max_logits = torch.where(max_logits > 0, max_logits, torch.tensor(eps, device=max_logits.device))
+            ds = -truncated_max_logits.var(dim=0)
+            disagreement_scores.append(ds)
+        metrics.append(torch.stack(disagreement_scores))
+
+        # 10. Weight entropy score
+        weight_entropy_scores = []
+        for j in range(batch_size):
+            logits = logit_stack[:, j, :]
+            max_logits, predicted_classes = torch.max(logits, dim=1)
+            truncated_max_logits = torch.where(max_logits > 0, max_logits, torch.tensor(eps, device=max_logits.device))
+            sum_truncated_logits = truncated_max_logits.sum()
+            if sum_truncated_logits == 0: # Handle edge case if all are eps
+                tilde_eta_omega = torch.ones_like(truncated_max_logits) / batch_size
+            else:
+                tilde_eta_omega = truncated_max_logits / sum_truncated_logits
+            we = -(tilde_eta_omega * torch.log(tilde_eta_omega + eps)).sum(dim=0) # Add eps for log stability
+            weight_entropy_scores.append(we)
+        metrics.append(torch.stack(weight_entropy_scores))
+
+        # 11. Log-determinant disagreement
+        log_det_disagreement_scores = []
+        for j in range(batch_size):
+            logits = logit_stack[:, j, :]
+            max_logits, predicted_classes = torch.max(logits, dim=1)
+            truncated_max_logits = torch.where(max_logits > 0, max_logits, torch.tensor(eps, device=max_logits.device))
+            covariance_scalar = torch.cov(truncated_max_logits)
+            ldd = -torch.log(covariance_scalar + 1e-6) # chose lambda_reg = 1e-6
+            log_det_disagreement_scores.append(ldd)
+        metrics.append(torch.stack(log_det_disagreement_scores))
         
         # build metric labels
         labels = [
@@ -121,12 +148,12 @@ class SimilarityPostprocessor(BasePostprocessor):
             'avg_jaccard_similarity',
             'cka_rank1_fraction',
             'neg_mmd',
-            'max_logit_variance',
             'neg_max_logit_variance',
-            'mean_logit_variance',
             'neg_mean_logit_variance',
-            'entropy_variance',
-            'neg_entropy_variance'
+            'neg_entropy_variance',
+            'disagreement_score',
+            'weight_entropy_score',
+            'log_det_disagreement_score'
         ]
         self.metric_labels = labels
         preds = output.argmax(dim=1)
